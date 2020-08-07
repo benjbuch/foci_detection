@@ -7,6 +7,13 @@
 	
 	Benjamin Buchmuller
 
+	2020-08-07 version 2.1
+
+	- separate nuclei/foci detection from nuclei/foci quantification options
+	- ask to operate background subtraction on the files stirctly necessary
+	- fix an issue that would cause default background choices not to be set
+	- fix inconsistent file names
+
 	2020-07-06 revised version 2.0
 
 */
@@ -49,9 +56,10 @@ f_max_prominence = 1000;
 f_delta_prominence = 5;
 f_est_foci_per_nucleus = 40; // do not go above 200 or so ...
 
-ask_background_choices = newArray("subtract a constant background", "subtract by rolling ball", "subtract nothing");
-ask_background_default_n = 1;
+ask_background_choices = newArray("constant background subtraction", "rolling ball subtraction", "doing nothing");
+ask_background_default_n = 2;
 ask_background_default_f = 1;
+ask_background_default_q = 0;
 ask_every = 2;
 
 // ==== INTERACTIVE INTERFACE ==================================================
@@ -63,7 +71,6 @@ if (interactive) org_dir = getDirectory("Choose a directory with images");
 all_files = getFileList(org_dir);
 
 if (interactive) {
-
 
 	// get a range of candidate file suffices that can be used
 
@@ -117,29 +124,33 @@ if (interactive) {
 	
 	Dialog.create("Foci Detection");
 	Dialog.setInsets(0, 10, 0);
-	Dialog.addMessage("------------------------------------------");
+	// Dialog.addMessage("------------------------------------------");
 	Dialog.setInsets(5, 10, 5);
 	Dialog.addMessage("Get Nuclei from ...");
 	Dialog.setInsets(5, 10, 5);
 	Dialog.addCheckboxGroup(1, suffix_opt.length, suffix_opt, def_nuclei);
+	Dialog.addChoice("Based on", ask_background_choices, ask_background_choices[ask_background_default_n]);
 	// Parameters of a nucleus (in picture units)?
 	Dialog.addNumber("Nuclear Area >", n_min_area, 1, 4, "");
 	Dialog.addNumber("Circularity >", n_min_circ, 1, 4, "");
 	Dialog.addNumber("Circularity <", n_max_circ, 1, 4, "");
-	Dialog.addChoice("I want to ...", ask_background_choices, ask_background_default_n);
+	// Nuclear intensities are quantified from the survey set, not from the nuclei set!
+	// Dialog.addChoice("Quantify after", ask_background_choices, ask_background_default_n);
 	Dialog.setInsets(5, 10, 0);
-	Dialog.addMessage("------------------------------------------");
+	Dialog.addMessage("");//------------------------------------------");
 	// Parameters of foci
 	Dialog.setInsets(5, 10, 5);
-	Dialog.addMessage("Quantitate Nuclear Foci on ...");
+	Dialog.addMessage("Get Nuclear Foci from ...");
 	Dialog.setInsets(5, 10, 5);
 	Dialog.addCheckboxGroup(1, suffix_opt.length, suffix_opt, def_survey);
+	Dialog.addChoice("Based on", ask_background_choices, ask_background_choices[ask_background_default_f]);
 	Dialog.addNumber("Prominence", f_prominence, 0, 4, "");
 	Dialog.addNumber("Width <", f_max_width, 1, 4, "");
-	Dialog.addChoice("I want to ...", ask_background_choices, ask_background_default_f);
+	Dialog.addMessage("");
+	Dialog.addChoice("Quantify after", ask_background_choices, ask_background_choices[ask_background_default_q]);
 	Dialog.setInsets(5, 10, 0);
-	Dialog.addMessage("------------------------------------------");
-	Dialog.addSlider("Ask every ...", 1, 100, ask_every);
+	Dialog.addMessage("");//------------------------------------------");
+	Dialog.addNumber("Ask me every", ask_every, 0, 3, "images to proceed.");
 	Dialog.show();
 	
 	// collect parameters
@@ -156,17 +167,12 @@ if (interactive) {
 	}
 	
 	intended_nuclei_set = Array.trim(intended_nuclei_set, nins);
-	
+
+	n_detect_from = Dialog.getChoice();
 	n_min_area = Dialog.getNumber();
 	n_min_circ = Dialog.getNumber();
 	n_max_circ = Dialog.getNumber();
-	ask_background_default_n = Dialog.getChoice();
-	
-	for (i = 0; i < ask_background_choices.length; i++) {
-		
-		if (ask_background_choices[i] == ask_background_default_n) ask_background_default_n = i;
-		
-	}
+	// n_quantify_from = Dialog.getChoice();
 	
 	for (i = 0; i < suffix_opt.length; i++) {
 		
@@ -177,18 +183,53 @@ if (interactive) {
 	}
 	
 	intended_survey_set = Array.trim(intended_survey_set, niss);
-	
+
+	f_detect_from = Dialog.getChoice();
 	f_prominence = Dialog.getNumber();
 	f_max_width = Dialog.getNumber();
-	ask_background_default_f = Dialog.getChoice();
+	f_quantify_from = Dialog.getChoice();
+
+	ask_every = Dialog.getNumber();
+
+	// convert background choices into corresponding numbers and determine which 
+	// background operations need to be performed
+
+	n_do_background = newArray(ask_background_choices.length);
+	f_do_background = newArray(ask_background_choices.length);
 	
 	for (i = 0; i < ask_background_choices.length; i++) {
+
+		in_any_case_n = 0;
+		in_any_case_f = 0;
 		
-		if (ask_background_choices[i] == ask_background_default_f) ask_background_default_f = i;
+		if (ask_background_choices[i] == n_detect_from) {
+			
+			n_detect_from = i; in_any_case_n = 1;
+			
+		}
+		
+		if (ask_background_choices[i] == f_detect_from) {
+			
+			f_detect_from = i; in_any_case_f = 1;
+			
+		}
+
+		// if (ask_background_choices[i] == n_quantify_from) {
+		//	
+		//     n_quantify_from = i; in_any_case_n = 1;
+		//	
+		// }
+		
+		if (ask_background_choices[i] == f_quantify_from) {
+			
+			f_quantify_from = i; in_any_case_f = 1;
+			
+		}
+
+		n_do_background[i] = in_any_case_n;
+		f_do_background[i] = in_any_case_f;
 		
 	}
-	
-	ask_every = Dialog.getNumber();
 
 }
 
@@ -267,54 +308,58 @@ for (f = 0; f < all_files.length; f++) {
 
 			}
 
-			all_suffices = Array.concat(nuclei_set, survey_set);
-
 			// TASK 1: BACKGROUND SUBTRACTION AND WRITING TO OUTPUT FILE
 
 			log_file = res_dir + "_backgrounds.csv";
 
 			if (!File.exists(log_file)) File.open(log_file);
 
-			for (g = 0; g < all_suffices.length; g++) {
+			// nuclei
+
+			for (g = 0; g < nuclei_set.length; g++) {
 				
-				org_file = org_dir + group_name + suffix_sep + all_suffices[g] + "." + file_type;
-				res_file = res_dir + group_name + suffix_sep + all_suffices[g];
+				org_file = org_dir + group_name + suffix_sep + nuclei_set[g] + "." + file_type;
+				res_file = res_dir + group_name + suffix_sep + nuclei_set[g];
 
-				if (File.exists(res_file + "_n." + file_type) && File.exists(res_file + "_f." + file_type)) {
+				for (i = 0; i < n_do_background.length; i++) {
 
-					// PASS //
+					// check for all background choices whether we need to create the image or
+					// whether it already exists
 
-					// this will make sure not to process duplicate entries in all_suffices twice
+					if (n_do_background[i] == 1 && !File.exists(res_file + "_" + i + "." + file_type))  {
 
-				} else {
-					
-					if (ask_background_default_n == 2) File.copy(org_file, res_file + "_n." + file_type);
-					if (ask_background_default_f == 2) File.copy(org_file, res_file + "_f." + file_type);
-					
-					if (ask_background_default_n == 1 || ask_background_default_f == 1) {
-						
-						subtract_rolling_background(org_file, res_file + ".tmp." + file_type, log_file);
-						
-						if (ask_background_default_n == 1) File.copy(res_file + ".tmp." + file_type, res_file + "_n." + file_type);
-						if (ask_background_default_f == 1) File.copy(res_file + ".tmp." + file_type, res_file + "_f." + file_type);
-						
-						File.delete(res_file + ".tmp." + file_type);
-						
+						if (i == 2) File.copy(org_file, res_file + "_" + i + "." + file_type);
+
+						if (i == 1) subtract_rolling_background(org_file, res_file + "_" + i + "." + file_type, log_file);
+
+						if (i == 0) subtract_constant_background(org_file, res_file + "_" + i + "." + file_type, log_file);
+
 					}
 					
-					if (ask_background_default_n == 0 || ask_background_default_f == 0) {
-						
-						setBatchMode(false);
-						
-						subtract_constant_background(org_file, res_file + ".tmp." + file_type, log_file);
-						
-						setBatchMode(true);
-						
-						if (ask_background_default_n == 0) File.copy(res_file + ".tmp." + file_type, res_file + "_n." + file_type);
-						if (ask_background_default_f == 0) File.copy(res_file + ".tmp." + file_type, res_file + "_f." + file_type);
-						
-						File.delete(res_file + ".tmp." + file_type);
-						
+				}
+
+			}
+
+			// survey
+
+			for (g = 0; g < survey_set.length; g++) {
+				
+				org_file = org_dir + group_name + suffix_sep + survey_set[g] + "." + file_type;
+				res_file = res_dir + group_name + suffix_sep + survey_set[g];
+
+				for (i = 0; i < n_do_background.length; i++) {
+
+					// check for all background choices whether we need to create the image or
+					// whether it already exists
+
+					if (f_do_background[i] == 1 && !File.exists(res_file + "_" + i + "." + file_type))  {
+
+						if (i == 2) File.copy(org_file, res_file + "_" + i + "." + file_type);
+
+						if (i == 1) subtract_rolling_background(org_file, res_file + "_" + i + "." + file_type, log_file);
+
+						if (i == 0) subtract_constant_background(org_file, res_file + "_" + i + "." + file_type, log_file);
+
 					}
 					
 				}
@@ -331,7 +376,7 @@ for (f = 0; f < all_files.length; f++) {
 
 				// these must exist; else this will be an error by intention
 
-				open(res_dir + group_name + suffix_sep + nuclei_set[n] + "_n." + file_type);
+				open(res_dir + group_name + suffix_sep + nuclei_set[n] + "_" + n_detect_from + "." + file_type);
 
 				img_w = getWidth();
 				img_h = getHeight();
@@ -347,13 +392,13 @@ for (f = 0; f < all_files.length; f++) {
 				run("Watershed");
 
 				// add to ROI manager and exclude anything that can't be a 
-				// nucleusby its small size or elongated shape and also the
+				// nucleus by its small size or elongated shape and also the
 				// ones that are on the edge of the image
 				run("Analyze Particles...", "size=" + n_min_area + "\
 				-Infinity circularity=" + n_min_circ + "-" + n_max_circ + " \
 				show=[Outlines] exclude clear add");
 
-				// save(res_dir + group_name + "_ROIs_" + nuclei_set[n] + ".jpg");
+				// save(res_dir + group_name + "_ROIs_on_" + nuclei_set[n] + ".jpg");
 
 				close(); // nuclear outlines saved to file
 
@@ -370,56 +415,56 @@ for (f = 0; f < all_files.length; f++) {
 
 				for (m = 0; m < survey_set.length; m++) {
 
-					open(res_dir + group_name + suffix_sep + survey_set[m] + "_f." + file_type);
+					open(res_dir + group_name + suffix_sep + survey_set[m] + "_" + f_detect_from + "." + file_type);
 
 					roi_idx[m + 1] = find_foci(f_prominence, f_rectangle, f_iter, f_cpcf, f_base, 
 						f_max_width, f_min_prominence, f_max_prominence, f_delta_prominence, 
 						roi_idx[0] * f_est_foci_per_nucleus);
 
-						// create mask for background measurements in the nucleus for each survey_set
+					// create mask for background measurements in the nucleus for each survey_set
 
-						newImage("foci_mask", "8-bit white", getWidth(), getHeight(), 1);
+					newImage("foci_mask", "8-bit white", getWidth(), getHeight(), 1);
 
-						// all nuclei black
-						roiManager("select", Array.slice(Array.getSequence(roiManager("count")), 0, roi_idx[0]));
-						setForegroundColor(0, 0, 0); roiManager("fill");
-						// all foci white; non-nuclear foci will not be visible
-						roiManager("select", Array.slice(Array.getSequence(roiManager("count")), roi_idx[m], roi_idx[m + 1]));
-						setForegroundColor(255, 255, 255); roiManager("fill");
+					// all nuclei black
+					roiManager("select", Array.slice(Array.getSequence(roiManager("count")), 0, roi_idx[0]));
+					setForegroundColor(0, 0, 0); roiManager("fill");
+					// all foci white; non-nuclear foci will not be visible
+					roiManager("select", Array.slice(Array.getSequence(roiManager("count")), roi_idx[m], roi_idx[m + 1]));
+					setForegroundColor(255, 255, 255); roiManager("fill");
 
-						run("Convert to Mask");
-						// since foci detection usually is very strict, some spill-over might still be present in the nucleus
-						run("Erode"); run("Erode"); run("Erode");
+					run("Convert to Mask");
+					// since foci detection usually is very strict, some spill-over might still be present in the nucleus
+					run("Erode"); run("Erode"); run("Erode");
 
-						imageCalculator("Multiply create 32-bit", "foci_mask", group_name + suffix_sep + survey_set[m] + "_f." + file_type);
+					imageCalculator("Multiply create 32-bit", "foci_mask", group_name + suffix_sep + survey_set[m] + "_" + f_detect_from + "." + file_type);
 
-						close(group_name + suffix_sep + survey_set[m] + "." + file_type);
+					close(group_name + suffix_sep + survey_set[m] + "_" + f_detect_from + "." + file_type);
 
-						setThreshold(1, pow(2, 32) - 2);
+					setThreshold(1, pow(2, 32) - 2);
 
-						for (j = 0; j < roi_idx[0]; j++) {
+					for (j = 0; j < roi_idx[0]; j++) {
 
-							roiManager("select", j);
-							List.setMeasurements("limit"); // measure and limit to threshold, so we can use the mask
+						roiManager("select", j);
+						List.setMeasurements("limit"); // measure and limit to threshold, so we can use the mask
 
-							// NOTE: Integrated Density = Area x Mean Gray Value
-							//
-							// NOTE: These values represent 32-bit ranges excluding NaNs, but are not handled correctly
-							// by the measurement macro, i.e. they remain scaled in one or the other respect; therefore
-							// we use approximate manual down-scaling from 32- to 16-bit.
-							// https://forum.image.sc/t/how-to-properly-scale-from-32-bit-to-16-bit/10894/2
-							nucleus_i[j + m * roi_idx[0]] = List.getValue("Mean") / pow(2, 8);
-							nucleus_a[j + m * roi_idx[0]] = List.getValue("Area"); // although this is the same for all channels
-
-						}
-
-						close(); // masked image
-
-						save(res_dir + group_name + "_ROIs_" + nuclei_set[n] + "_on_" + survey_set[m] + "_mask." + file_type);
-
-						close("foci_mask");
+						// NOTE: Integrated Density = Area x Mean Gray Value
+						//
+						// NOTE: These values represent 32-bit ranges excluding NaNs, but are not handled correctly
+						// by the measurement macro, i.e. they remain scaled in one or the other respect; therefore
+						// we use approximate manual down-scaling from 32- to 16-bit.
+						// https://forum.image.sc/t/how-to-properly-scale-from-32-bit-to-16-bit/10894/2
+						nucleus_i[j + m * roi_idx[0]] = List.getValue("Mean") / pow(2, 8);
+						nucleus_a[j + m * roi_idx[0]] = List.getValue("Area"); // although this is the same for all channels
 
 					}
+
+					close(); // masked image
+
+					save(res_dir + group_name + "_ROIs_on_" + nuclei_set[n] + "_in_" + survey_set[m] + "_mask." + file_type);
+
+					close("foci_mask");
+
+				}
 
 					// TASK 4: SELECT FOCI
 
@@ -516,7 +561,7 @@ for (f = 0; f < all_files.length; f++) {
 
 						roiManager("deselect");
 
-						save(res_dir + group_name + "_ROIs_" + nuclei_set[n] + "_on_" + survey_set[m] + ".jpg");
+						save(res_dir + group_name + "_ROIs_on_" + nuclei_set[n] + "_in_" + survey_set[m] + ".jpg");
 
 						// MEASUREMENTS
 
@@ -541,7 +586,7 @@ for (f = 0; f < all_files.length; f++) {
 
 							for (s = 0; s < survey_set.length; s++) {
 
-								open(res_dir + group_name + suffix_sep + survey_set[s] + "_f." + file_type);
+								open(res_dir + group_name + suffix_sep + survey_set[s] + "_" + f_quantify_from + "." + file_type);
 
 								for (i = 0; i < in_nucleus.length; i++) {
 
@@ -552,6 +597,8 @@ for (f = 0; f < all_files.length; f++) {
 									setResult("Focus_Mean_" + survey_set[s], i, d2s(List.getValue("Mean"), 3));
 
 								}
+
+								close(res_dir + group_name + suffix_sep + survey_set[s] + "_" + f_quantify_from + "." + file_type);
 
 							}
 
@@ -604,6 +651,8 @@ for (f = 0; f < all_files.length; f++) {
 
 						} else {
 
+							close("foci_selection");  // we needed an open image for the previous step
+
 							// no foci at all
 
 							for (j = 0; j < roi_idx[0]; j++) {
@@ -651,6 +700,8 @@ for (f = 0; f < all_files.length; f++) {
 						run("Clear Results");
 
 					}
+
+					close("*");
 					
 					setBatchMode(false);
 
@@ -680,7 +731,12 @@ for (f = 0; f < all_files.length; f++) {
 		// wait for user to define suitable area
 
 		setTool("rectangle"); run("Restore Selection");
+
+		setBatchMode("show");
+		
 		waitForUser("Select background.");
+
+		setBatchMode("hide");
 
 		List.setMeasurements;
 
@@ -691,9 +747,9 @@ for (f = 0; f < all_files.length; f++) {
 
 		save(save_img_path);
 
-		close();
+		close("*");
 
-		File.append(save_img_path + "," + d2s(List.getValue("Mean"), 3), log_file);
+		File.append(save_img_path + ",constant," + d2s(List.getValue("Mean"), 3), log_file);
 
 	}
 
@@ -709,9 +765,9 @@ for (f = 0; f < all_files.length; f++) {
 
 		save(save_img_path);
 
-		close();
+		close("*");
 
-		File.append(save_img_path + "," + "rolling " + radius, log_file);
+		File.append(save_img_path + ",rolling," + radius, log_file);
 
 	}
 
