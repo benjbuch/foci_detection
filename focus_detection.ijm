@@ -7,6 +7,14 @@
 	
 	Benjamin Buchmuller
 
+	2020-10-09 version 2.2
+
+	- fix an issue which caused nuclear backgrounds of a single channel only
+	  to be reported
+	- fix an issue which caused inconstisten numbering of foci in images and
+	  table output
+	- improved selection of channel suffixes in the user interface
+
 	2020-08-07 version 2.1
 
 	- separate nuclei/foci detection from nuclei/foci quantification options
@@ -108,17 +116,30 @@ if (interactive) {
 
 	for (i = 0; i < suffix_opt.length; i++) {
 
+		for (j = 0; j < intended_survey_set.length; j++) {
+
+
+			if (suffix_opt[i] == intended_survey_set[j]) {
+
+				def_nuclei[i] = 0;
+				def_survey[i] = 1;
+				break;
+				
+			} else {
+
+				def_nuclei[i] = 0;
+				def_survey[i] = 0;
+				
+			}
+			
+		}
+
 		if (suffix_opt[i] == intended_nuclei_set[0]) {
 
 			def_nuclei[i] = 1;
 			def_survey[i] = 0;
 
-		} else {
-
-			def_nuclei[i] = 0;
-			def_survey[i] = 1;
-
-		}
+		} 
 
 	}
 	
@@ -137,7 +158,7 @@ if (interactive) {
 	// Nuclear intensities are quantified from the survey set, not from the nuclei set!
 	// Dialog.addChoice("Quantify after", ask_background_choices, ask_background_default_n);
 	Dialog.setInsets(5, 10, 0);
-	Dialog.addMessage("");//------------------------------------------");
+	Dialog.addMessage("");
 	// Parameters of foci
 	Dialog.setInsets(5, 10, 5);
 	Dialog.addMessage("Get Nuclear Foci from ...");
@@ -149,7 +170,7 @@ if (interactive) {
 	Dialog.addMessage("");
 	Dialog.addChoice("Quantify after", ask_background_choices, ask_background_choices[ask_background_default_q]);
 	Dialog.setInsets(5, 10, 0);
-	Dialog.addMessage("");//------------------------------------------");
+	Dialog.addMessage("");
 	Dialog.addNumber("Ask me every", ask_every, 0, 3, "images to proceed.");
 	Dialog.show();
 	
@@ -240,6 +261,8 @@ if (interactive) {
 
 res_dir = org_dir + "results" + File.separator; File.makeDirectory(res_dir);
 
+print(res_dir);
+
 // make sure the ROI manager is closed; ImageJ will use an invisible ROI manager
 // that will run faster and more reliable if in batch mode; if interaction is
 // required, use roiManager("reset") instead; DO NOT CHANGE THE ORDER OF THESE
@@ -287,6 +310,8 @@ for (f = 0; f < all_files.length; f++) {
 
 			group_name  = replace(file_base, suffix_sep + nuclei_set[0], "");
 
+			print(group_name);
+
 			if (++ask_every_n % ask_every == 0) showMessageWithCancel("Advancing to '" + group_name + "'", 
 				"Do you wish to proceed?");
 
@@ -306,6 +331,14 @@ for (f = 0; f < all_files.length; f++) {
 
 				}
 
+			}
+
+			for (s = 0; s < survey_set.length; s++) {
+
+				// D:DIAGNOSITC
+				
+				// print("survey_set[" + s + "] is " + survey_set[s]);
+				
 			}
 
 			// TASK 1: BACKGROUND SUBTRACTION AND WRITING TO OUTPUT FILE
@@ -408,7 +441,7 @@ for (f = 0; f < all_files.length; f++) {
 
 				close(); // image used to select nuclei from
 
-				// TASK 3: MEASURE ALL NUCLEI WITHOUT FOCI
+				// TASK 3: MEASURE ALL NUCLEI WITHOUT MEASURING FOCI
 
 				nucleus_i = Array.getSequence(roi_idx[0] * survey_set.length);
 				nucleus_a = Array.getSequence(roi_idx[0] * survey_set.length);
@@ -466,253 +499,271 @@ for (f = 0; f < all_files.length; f++) {
 
 				}
 
-					// TASK 4: SELECT FOCI
+				// TASK 4: SELECT FOCI
 
-					// for each survey group ...
+				// for each survey group ...
 
-					// DETERMINE FOCUS-NUCLEUS PAIRS
+				// DETERMINE FOCUS-NUCLEUS PAIRS
 
-					// cycle through all foci and get the (first) nucleus that matches; more precisely, if
-					// nucleus_group[i] != i, the index of of the matching nucleus in the manager is given
-					//
-					nucleus_group = Array.getSequence(roiManager("count"));
+				// cycle through all foci and get the (first) nucleus that matches; more precisely, if
+				// nucleus_group[i] != i, the index of of the matching nucleus in the manager is given
+				//
+				nucleus_group = Array.getSequence(roiManager("count"));
 
-					newImage("dummy", "RGB white", img_w, img_h, 1);
-					setForegroundColor(0, 0, 0); roiManager("draw");
+				newImage("dummy", "RGB white", img_w, img_h, 1);
+				setForegroundColor(0, 0, 0); roiManager("draw");
 
-					for (i  = roi_idx[0]; i < roiManager("count"); i++) {
+				for (i  = roi_idx[0]; i < roiManager("count"); i++) {
 
-						for (j = 0; j < roi_idx[0]; j++) {
+					for (j = 0; j < roi_idx[0]; j++) {
 
-							roiManager("select", newArray(i, j));
-							roiManager("AND");
+						roiManager("select", newArray(i, j));
+						roiManager("AND");
 
-							if (selectionType > -1) {
+						if (selectionType > -1) {
 
-								nucleus_group[i] = j;
+							nucleus_group[i] = j;
 
-								j = roi_idx[0]; // basically a continue statement
-
-							}
+							j = roi_idx[0]; // basically a continue statement
 
 						}
 
 					}
 
-					close("dummy");
+				}
 
-					for (m = 0; m < survey_set.length; m++) {
+				close("dummy");
 
-						// draw selected vs all foci areas
+				for (m = 0; m < survey_set.length; m++) {
 
-						newImage("foci_selection", "RGB white", img_w, img_h, 1);
+					// draw selected vs all foci areas
 
-						// draw nuclei outline
+					newImage("foci_selection", "RGB white", img_w, img_h, 1);
 
-						roiManager("select", Array.getSequence(roi_idx[0]));
+					// draw nuclei outline
+
+					roiManager("select", Array.getSequence(roi_idx[0]));
+					setForegroundColor(0, 0, 0); roiManager("draw");
+
+					for (i = 0; i < roi_idx[0]; i++) {
+
+						roiManager("select", i);
 						setForegroundColor(0, 0, 0); roiManager("draw");
+						roiManager("select", i); // needs repetition
+						Roi.getBounds(x, y, w, h);
+						setFont("SansSerif", 18, "antialiased");
+						setForegroundColor(0, 0, 0); drawString(i + 1, x, y);
 
-						for (i = 0; i < roi_idx[0]; i++) {
+					}
 
-							roiManager("select", i);
-							setForegroundColor(0, 0, 0); roiManager("draw");
+					setFont("SansSerif", 12, "antialiased");
+
+					in_nucleus = Array.getSequence(roi_idx[m + 1] - roi_idx[m]); nin = 0;
+					of_nucleus = Array.getSequence(roi_idx[m + 1] - roi_idx[m]); nof = 0;
+
+					// D:DIAGNOSTIC
+					
+					// print(roi_idx[m] + " to " + roi_idx[m + 1]);
+
+					for (i = roi_idx[m]; i < roi_idx[m + 1]; i++) {
+
+						if (nucleus_group[i] != i) {
+
+							in_nucleus[nin] = i; nin++;
+
+							roiManager("select", i); 
+							setForegroundColor(0, 255, 0); roiManager("fill");
 							roiManager("select", i); // needs repetition
 							Roi.getBounds(x, y, w, h);
-							setFont("SansSerif", 18, "antialiased");
-							setForegroundColor(0, 0, 0); drawString(i + 1, x, y);
-
-						}
-
-						setFont("SansSerif", 12, "antialiased");
-
-						in_nucleus = Array.getSequence(roi_idx[m + 1] - roi_idx[m]); nin = 0;
-						of_nucleus = Array.getSequence(roi_idx[m + 1] - roi_idx[m]); nof = 0;
-
-						// print(roi_idx[m] + " to " + roi_idx[m + 1]);
-
-						for (i = roi_idx[m]; i < roi_idx[m + 1]; i++) {
-
-							if (nucleus_group[i] != i) {
-
-								in_nucleus[nin] = i; nin++;
-
-								roiManager("select", i); 
-								setForegroundColor(0, 255, 0); roiManager("fill");
-								roiManager("select", i); // needs repetition
-								Roi.getBounds(x, y, w, h);
-								setForegroundColor(0, 0, 0); drawString(i - roi_idx[m] + 1, x + w, y + h / 2 + getValue("font.height") / 2);
-
-							} else {
-
-								of_nucleus[nof] = i; nof++;
-
-								roiManager("select", i); 
-								setForegroundColor(255, 0, 255); roiManager("fill");
-								// roiManager("select", i); // needs repetition
-								// Roi.getBounds(x, y, w, h);
-								// setForegroundColor(0, 0, 0); drawString(i, x, y - h / 2);
-
-							}
-
-						}
-
-						in_nucleus = Array.trim(in_nucleus, nin);
-						of_nucleus = Array.trim(of_nucleus, nof);
-
-						roiManager("deselect");
-
-						save(res_dir + group_name + "_ROIs_on_" + nuclei_set[n] + "_in_" + survey_set[m] + ".jpg");
-
-						// MEASUREMENTS
-
-						// for all channels: recall shape descriptors of the foci
-
-						if (in_nucleus.length > 0) {
-
-							run("Set Measurements...", "area shape redirect=None decimal=3");
-							roiManager("select", in_nucleus);
-							roiManager("measure");
-
-							close("foci_selection");  // we needed an open image for the previous step
-
-							for (i = 0; i < in_nucleus.length; i++) {
-
-								setResult("Focus_Channel", i, survey_set[m]);
-								setResult("Focus_ID", i, i + 1);
-								setResult("Nucleus_ID", i, nucleus_group[in_nucleus[i]] + 1);
-								setResult("Nucleus_Area", i, nucleus_a[nucleus_group[in_nucleus[i]] + m * roi_idx[0]]);
-
-							}
-
-							for (s = 0; s < survey_set.length; s++) {
-
-								open(res_dir + group_name + suffix_sep + survey_set[s] + "_" + f_quantify_from + "." + file_type);
-
-								for (i = 0; i < in_nucleus.length; i++) {
-
-									roiManager("select", in_nucleus[i]);
-									List.setMeasurements;
-
-									setResult("Nucleus_Mean_" + survey_set[s], i, nucleus_i[nucleus_group[in_nucleus[i]] + m * roi_idx[0]]);
-									setResult("Focus_Mean_" + survey_set[s], i, d2s(List.getValue("Mean"), 3));
-
-								}
-
-								close(res_dir + group_name + suffix_sep + survey_set[s] + "_" + f_quantify_from + "." + file_type);
-
-							}
-
-							// add nuclei without foci
-
-							for (j = 0; j < roi_idx[0]; j++) {
-
-								for (i = 0; i < in_nucleus.length; i++) {
-
-									roiManager("select", newArray(in_nucleus[i], j));
-									roiManager("AND");
-
-									if (selectionType > -1) {
-
-										i = in_nucleus.length; // basically a continue statement
-
-									}
-
-									// if also the last foci roi tested does not fall within a
-									// nucleus roi, add the nucleus to the results table
-
-									if ((i == in_nucleus.length - 1) && (selectionType == -1)) {
-
-										res_idx = getValue("results.count");
-
-										setResult("Area", res_idx, "NA");
-										setResult("Circ.", res_idx, "NA");
-										setResult("AR", res_idx, "NA");
-										setResult("Round", res_idx, "NA");
-										setResult("Solidity", res_idx, "NA");
-
-										setResult("Focus_Channel", res_idx, survey_set[m]);
-										setResult("Focus_ID", res_idx, "NA");
-
-										setResult("Nucleus_ID", res_idx, j + 1);
-										setResult("Nucleus_Area", res_idx, nucleus_a[j]);
-
-										for (s = 0; s < survey_set.length; s++) {
-
-											setResult("Nucleus_Mean_" + survey_set[s], res_idx, nucleus_i[j + s * roi_idx[0]]);
-											setResult("Focus_Mean_" + survey_set[s], res_idx, "NA");
-
-										}
-
-									}
-
-								}
-
-							}
+							setForegroundColor(0, 0, 0); drawString(i - roi_idx[m] + 1, x + w, y + h / 2 + getValue("font.height") / 2);
 
 						} else {
 
-							close("foci_selection");  // we needed an open image for the previous step
+							of_nucleus[nof] = i; nof++;
 
-							// no foci at all
+							roiManager("select", i); 
+							setForegroundColor(255, 0, 255); roiManager("fill");
+							// roiManager("select", i); // needs repetition
+							// Roi.getBounds(x, y, w, h);
+							// setForegroundColor(0, 0, 0); drawString(i, x, y - h / 2);
 
-							for (j = 0; j < roi_idx[0]; j++) {
+						}
 
-								res_idx = getValue("results.count");
+					}
 
+					in_nucleus = Array.trim(in_nucleus, nin);
+					of_nucleus = Array.trim(of_nucleus, nof);
 
-								setResult("Area", res_idx, "NA");
-								setResult("Circ.", res_idx, "NA");
-								setResult("AR", res_idx, "NA");
-								setResult("Round", res_idx, "NA");
-								setResult("Solidity", res_idx, "NA");
+					// D:DIAGNOSTIC
 
-								setResult("Focus_Channel", res_idx, survey_set[m]);
-								setResult("Focus_ID", res_idx, "NA");
+					/*
 
-								setResult("Nucleus_ID", res_idx, j + 1);
-								setResult("Nucleus_Area", res_idx, nucleus_a[j]);
+					for (i = 0; i < 10; i++) {
 
-								for (s = 0; s < survey_set.length; s++) {
+						print(in_nucleus[i] + " is in");
+						
+					}
 
-									setResult("Nucleus_Mean_" + survey_set[s], res_idx, nucleus_i[j + s * roi_idx[0]]);
-									setResult("Focus_Mean_" + survey_set[s], res_idx, "NA");
+					for (i = 0; i < 10; i++) {
 
+						print(of_nucleus[i] + " is out");
+						
+					}
+
+					*/
+
+					roiManager("deselect");
+
+					save(res_dir + group_name + "_ROIs_on_" + nuclei_set[n] + "_in_" + survey_set[m] + ".jpg");
+
+					// MEASUREMENTS
+
+					// for all channels: recall shape descriptors of the foci
+
+					if (in_nucleus.length > 0) {
+
+						run("Set Measurements...", "area shape redirect=None decimal=3");
+						roiManager("select", in_nucleus);
+						roiManager("measure");
+
+						close("foci_selection");  // we needed an open image for the previous step
+
+						for (i = 0; i < in_nucleus.length; i++) {
+
+							setResult("Focus_Channel", i, survey_set[m]);
+							setResult("Focus_ID", i, in_nucleus[i] - roi_idx[m] + 1);
+							setResult("Nucleus_ID", i, nucleus_group[in_nucleus[i]] + 1);
+							setResult("Nucleus_Area", i, nucleus_a[nucleus_group[in_nucleus[i]] + m * roi_idx[0]]);
+
+						}
+
+						for (s = 0; s < survey_set.length; s++) {
+
+							open(res_dir + group_name + suffix_sep + survey_set[s] + "_" + f_quantify_from + "." + file_type);
+
+							for (i = 0; i < in_nucleus.length; i++) {
+
+								roiManager("select", in_nucleus[i]);
+								List.setMeasurements;
+
+								setResult("Nucleus_Mean_" + survey_set[s], i, nucleus_i[nucleus_group[in_nucleus[i]] + s * roi_idx[0]]);
+								setResult("Focus_Mean_" + survey_set[s], i, d2s(List.getValue("Mean"), 3));
+
+							}
+
+							// causes an error of no open image at this point!?
+							// close(group_name + suffix_sep + survey_set[s] + "_" + f_quantify_from + "." + file_type);
+
+						}
+
+						// add nuclei without foci
+
+						for (j = 0; j < roi_idx[0]; j++) {
+
+							for (i = 0; i < in_nucleus.length; i++) {
+
+								roiManager("select", newArray(in_nucleus[i], j));
+								roiManager("AND");
+
+								if (selectionType > -1) {
+
+									i = in_nucleus.length; // basically a continue statement
+
+								}
+
+								// if also the last foci roi tested does not fall within a
+								// nucleus roi, add the nucleus to the results table
+
+								if ((i == in_nucleus.length - 1) && (selectionType == -1)) {
+
+									res_idx = getValue("results.count");
+
+									setResult("Area", res_idx, "NA");
+									setResult("Circ.", res_idx, "NA");
+									setResult("AR", res_idx, "NA");
+									setResult("Round", res_idx, "NA");
+									setResult("Solidity", res_idx, "NA");
+									
+									setResult("Focus_Channel", res_idx, survey_set[m]);
+									setResult("Focus_ID", res_idx, "NA");
+									
+									setResult("Nucleus_ID", res_idx, j + 1);
+									setResult("Nucleus_Area", res_idx, nucleus_a[j]);
+									
+									for (s = 0; s < survey_set.length; s++) {
+
+										setResult("Nucleus_Mean_" + survey_set[s], res_idx, nucleus_i[j + s * roi_idx[0]]);
+										setResult("Focus_Mean_" + survey_set[s], res_idx, "NA");
+
+									}
+									
 								}
 
 							}
 
 						}
 
-						// add general descriptors
+					} else {
 
-						for (i = 0; i < getValue("results.count"); i++) {
+						close("foci_selection");  // we needed an open image for the previous step
 
-							setResult("Path", i, org_dir);
-							setResult("Image_Group", i, group_name);
-							setResult("Selection_Group", i, nuclei_set[n]);
+						// no foci at all
+
+						for (j = 0; j < roi_idx[0]; j++) {
+
+							res_idx = getValue("results.count");
+
+							setResult("Area", res_idx, "NA");
+							setResult("Circ.", res_idx, "NA");
+							setResult("AR", res_idx, "NA");
+							setResult("Round", res_idx, "NA");
+							setResult("Solidity", res_idx, "NA");
+							
+							setResult("Focus_Channel", res_idx, survey_set[m]);
+							setResult("Focus_ID", res_idx, "NA");
+							
+							setResult("Nucleus_ID", res_idx, j + 1);
+							setResult("Nucleus_Area", res_idx, nucleus_a[j]);
+
+							for (s = 0; s < survey_set.length; s++) {
+
+								setResult("Nucleus_Mean_" + survey_set[s], res_idx, nucleus_i[j + s * roi_idx[0]]);
+								setResult("Focus_Mean_" + survey_set[s], res_idx, "NA");
+
+							}
 
 						}
 
-						// write to file for each image group and selection group
+					}
+						
+					// add general descriptors
 
-						saveAs("results", res_dir + "_quantification_" + group_name + "_on_" + nuclei_set[n] + "_in_" + survey_set[m] +  ".csv");
+					for (i = 0; i < getValue("results.count"); i++) {
 
-						run("Clear Results");
+						setResult("Path", i, org_dir);
+						setResult("Image_Group", i, group_name);
+						setResult("Selection_Group", i, nuclei_set[n]);
 
 					}
 
-					close("*");
-					
-					setBatchMode(false);
+					// write to file for each image group and selection group
 
-					// tidy up; does not work in batch mode
-					close("Results");
-					close("ROI Manager");
+					saveAs("results", res_dir + "_quantification_" + group_name + "_on_" + nuclei_set[n] + "_in_" + survey_set[m] +  ".csv");
 
-					// tidy up, requires non-batch mode
-					setBatchMode(true);
+					run("Clear Results");
 
 				}
+
+				close("*");
+					
+				setBatchMode(false);
+
+				// tidy up; does not work in batch mode
+				close("Results");
+				close("ROI Manager");
+
+				// tidy up, requires non-batch mode
+				setBatchMode(true);
 
 			}
 
@@ -720,115 +771,116 @@ for (f = 0; f < all_files.length; f++) {
 
 	}
 
-	function subtract_constant_background(open_img_path, save_img_path, log_file) {
+}
 
-		open(open_img_path);
+function subtract_constant_background(open_img_path, save_img_path, log_file) {
 
-		// make visible
+	open(open_img_path);
 
-		run("Enhance Contrast", "saturated=0.35");
+	// make visible
 
-		// wait for user to define suitable area
+	run("Enhance Contrast", "saturated=0.35");
 
-		setTool("rectangle"); run("Restore Selection");
+	// wait for user to define suitable area
 
-		setBatchMode("show");
+	setTool("rectangle"); run("Restore Selection");
+
+	setBatchMode("show");
 		
-		waitForUser("Select background.");
+	waitForUser("Select background.");
 
-		setBatchMode("hide");
+	setBatchMode("hide");
 
-		List.setMeasurements;
+	List.setMeasurements;
 
-		// substract mean background intensity
+	// substract mean background intensity
 
-		run("Select None");
-		run("Subtract...", "value=" + List.getValue("Mean"));
+	run("Select None");
+	run("Subtract...", "value=" + List.getValue("Mean"));
 
-		save(save_img_path);
+	save(save_img_path);
 
-		close("*");
+	close("*");
 
-		File.append(save_img_path + ",constant," + d2s(List.getValue("Mean"), 3), log_file);
+	File.append(save_img_path + ",constant," + d2s(List.getValue("Mean"), 3), log_file);
 
-	}
+}
 
-	function subtract_rolling_background(open_img_path, save_img_path, log_file) {
+function subtract_rolling_background(open_img_path, save_img_path, log_file) {
 
-		open(open_img_path);
-		
-		getPixelSize(pixelUnit, pixelWidth, pixelHeight);
+	open(open_img_path);
+	
+	getPixelSize(pixelUnit, pixelWidth, pixelHeight);
 
-		radius = f_max_width * 0.1 / parseFloat(pixelWidth);
+	radius = f_max_width * 0.1 / parseFloat(pixelWidth);
 
-		run("Subtract Background...", "rolling=" + radius);
+	run("Subtract Background...", "rolling=" + radius);
 
-		save(save_img_path);
+	save(save_img_path);
 
-		close("*");
+	close("*");
 
-		File.append(save_img_path + ",rolling," + radius, log_file);
+	File.append(save_img_path + ",rolling," + radius, log_file);
 
-	}
+}
 
-	function find_foci(prominence, rectangle, iter, cpcf, base, max_width, 
-		min_prominence, max_prominence, dlt_prominence, est_max_rois) {
+function find_foci(prominence, rectangle, iter, cpcf, base, max_width, 
+	min_prominence, max_prominence, dlt_prominence, est_max_rois) {
 
-			// if prominence == 0, then try to determine optimal prominence by image running from
-			// min_prominence to max_prominence
+	// if prominence == 0, then try to determine optimal prominence by image running from
+	// min_prominence to max_prominence
 
-			if (prominence == 0) for (p = min_prominence; p < max_prominence + dlt_prominence; p = p + dlt_prominence) { 
+	if (prominence == 0) for (p = min_prominence; p < max_prominence + dlt_prominence; p = p + dlt_prominence) { 
 
-				if (prominence != 0) {
+		if (prominence != 0) {
 
-					print("Estimated prominence for '" + getTitle() + "' is " + prominence);
-					break;
+			print("Estimated prominence for '" + getTitle() + "' is " + prominence);
+			break;
 					
-				}
-
-				run("Find Maxima...", "prominence=" + p + " output=Count");
-
-				// break at the minimal reasonable estimate of ROIs; this is not a strict
-				// limit, but will save computation during the subsequent Gauss fitting 
-				// when spurious noise is in the background is present
-
-				if (getResult("Count", nResults - 1) < est_max_rois) prominence = p;
-
-				run("Clear Results");
-
-			}
-
-			// method based on peak maxima
-
-			run("Find Maxima...", "prominence=" + prominence + " \
-			strict exclude output=[Point Selection]");
-
-			// warn against very high numbers of ROIs on the image
-
-			if (roiManager("count") > 1000) showMessageWithCancel("Exceptional high number of ROIs", 
-				"Do you want to fit " + roiManager("count") + " ROIs? Consider a higher prominence.");
-
-			// estimate ROIs from 2D Gaussian fit
-
-			// pixel=... gives pixel size in object plane in nm (= sensor pixel size / magnification); should be available via IJ; conversion of µm to nm is 1000-fold, but 10 works ....
-
-			getPixelSize(pixelUnit, pixelWidth, pixelHeight);
-
-			run("GaussFit OnSpot", "shape=Ellipse fitmode=[Levenberg Marquard] \
-			rectangle=" + rectangle + " pixel=" + parseFloat(pixelWidth) * 10 + " \
-			max=" + iter + " cpcf=" + cpcf + " base=" + base);
-
-			// use this information to get the ROI as ellipses back
-
-			for (i = 0; i < nResults; i++) {
-
-				makeEllipse(getResult("X", i) - getResult("Width", i) / 2, getResult("Y", i), getResult("X", i) + getResult("Width", i) / 2, getResult("Y", i), 1 / getResult("A", i));
-				if (abs(getResult("Width", i)) < max_width) roiManager("add");
-
-			}
-
-			run("Clear Results");
-
-			return(roiManager("count"));
-
 		}
+
+		run("Find Maxima...", "prominence=" + p + " output=Count");
+
+		// break at the minimal reasonable estimate of ROIs; this is not a strict
+		// limit, but will save computation during the subsequent Gauss fitting 
+		// when spurious noise is in the background is present
+
+		if (getResult("Count", nResults - 1) < est_max_rois) prominence = p;
+
+		run("Clear Results");
+
+	}
+
+	// method based on peak maxima
+
+	run("Find Maxima...", "prominence=" + prominence + " \
+	strict exclude output=[Point Selection]");
+
+	// warn against very high numbers of ROIs on the image
+
+	if (roiManager("count") > 1000) showMessageWithCancel("Exceptional high number of ROIs", 
+		"Do you want to fit " + roiManager("count") + " ROIs? Consider a higher prominence.");
+
+	// estimate ROIs from 2D Gaussian fit
+	// pixel=... gives pixel size in object plane in nm (= sensor pixel size / magnification); should be available via IJ; conversion of µm to nm is 1000-fold, but 10 works ....
+
+	getPixelSize(pixelUnit, pixelWidth, pixelHeight);
+
+	run("GaussFit OnSpot", "shape=Ellipse fitmode=[Levenberg Marquard] \
+		rectangle=" + rectangle + " pixel=" + parseFloat(pixelWidth) * 10 + " \
+		max=" + iter + " cpcf=" + cpcf + " base=" + base);
+
+	// use this information to get the ROI as ellipses back
+
+	for (i = 0; i < nResults; i++) {
+
+		makeEllipse(getResult("X", i) - getResult("Width", i) / 2, getResult("Y", i), getResult("X", i) + getResult("Width", i) / 2, getResult("Y", i), 1 / getResult("A", i));
+		if (abs(getResult("Width", i)) < max_width) roiManager("add");
+
+	}
+
+	run("Clear Results");
+
+	return(roiManager("count"));
+
+}
