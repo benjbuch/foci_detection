@@ -7,6 +7,10 @@
 	
 	Benjamin Buchmuller
 
+	2020-11-04 version 2.2b
+
+	- export x, y, w, h coordinates
+
 	2020-10-09 version 2.2
 
 	- fix an issue which caused nuclear backgrounds of a single channel only
@@ -626,9 +630,15 @@ for (f = 0; f < all_files.length; f++) {
 						roiManager("select", in_nucleus);
 						roiManager("measure");
 
-						close("foci_selection");  // we needed an open image for the previous step
-
 						for (i = 0; i < in_nucleus.length; i++) {
+
+							roiManager("select", in_nucleus[i]);
+							Roi.getBounds(x, y, w, h);
+
+							setResult("x", i, x);
+							setResult("y", i, y);
+							setResult("w", i, w);
+							setResult("h", i, h);
 
 							setResult("Focus_Channel", i, survey_set[m]);
 							setResult("Focus_ID", i, in_nucleus[i] - roi_idx[m] + 1);
@@ -636,6 +646,8 @@ for (f = 0; f < all_files.length; f++) {
 							setResult("Nucleus_Area", i, nucleus_a[nucleus_group[in_nucleus[i]] + m * roi_idx[0]]);
 
 						}
+
+						close("foci_selection");  // we needed an open image for the previous step
 
 						for (s = 0; s < survey_set.length; s++) {
 
@@ -683,6 +695,11 @@ for (f = 0; f < all_files.length; f++) {
 									setResult("AR", res_idx, "NA");
 									setResult("Round", res_idx, "NA");
 									setResult("Solidity", res_idx, "NA");
+
+									setResult("x", res_idx, "NA");
+									setResult("y", res_idx, "NA");
+									setResult("w", res_idx, "NA");
+									setResult("h", res_idx, "NA");
 									
 									setResult("Focus_Channel", res_idx, survey_set[m]);
 									setResult("Focus_ID", res_idx, "NA");
@@ -718,6 +735,11 @@ for (f = 0; f < all_files.length; f++) {
 							setResult("AR", res_idx, "NA");
 							setResult("Round", res_idx, "NA");
 							setResult("Solidity", res_idx, "NA");
+
+							setResult("x", res_idx, "NA");
+							setResult("y", res_idx, "NA");
+							setResult("w", res_idx, "NA");
+							setResult("h", res_idx, "NA");
 							
 							setResult("Focus_Channel", res_idx, survey_set[m]);
 							setResult("Focus_ID", res_idx, "NA");
