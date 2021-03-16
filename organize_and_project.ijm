@@ -11,7 +11,6 @@
 	
 */
 
-
 // ==== USER-DEFINED PARAMETERS ================================================
 
 usr_rename_to = "Experiment-Group-Channel";
@@ -60,12 +59,9 @@ function wrap_words(s) {
 	
 }
 
-function new_file_location(f_path, r_path, rename_to, drop_hash) {
+function new_file_location(path_to_file, path_to_mount, rename_to, drop_hash) {
 
-	// f_path is path to file
-	// r_path is path to selected directory
-
-	p_path  = replace(f_path, r_path, "");
+	p_path  = replace(path_to_file, path_to_mount, "");
 
 	p_split = split(p_path, File.separator);
 
@@ -141,29 +137,33 @@ Dialog.addCheckbox("overwrite", usr_overwrite);
 Dialog.addCheckbox("recreate folder structure", usr_restore  );
 Dialog.show();
 
-def_file_extensions = "";
+// create partial regex for file extenstions to process
+
+usr_fileext = "";
 
 for (i = 0; i < choices_fileext.length; i++) {
 
 	ticked = Dialog.getCheckbox();
 
-	if (ticked == 1) def_file_extensions = def_file_extensions + "/" +
+	if (ticked == 1) usr_fileext = usr_fileext + "/" +
 		choices_fileext[i];
 	
 }
 
-def_file_extensions = replace(def_file_extensions, "^/", "");
-def_file_extensions = replace(def_file_extensions, "/", "|");
-def_file_extensions = replace(def_file_extensions, "\\.", "");
+usr_fileext = replace(usr_fileext, "^/", "");
+usr_fileext = replace(usr_fileext, "/", "|");
+usr_fileext = replace(usr_fileext, "\\.", "");
+
+// collect other parameters
 
 usr_rename_to = Dialog.getRadioButton();
-usr_z_project  = Dialog.getCheckbox();
-usr_drop_hash  = Dialog.getCheckbox();
-choices_skipdir = Dialog.getRadioButton(); // pseudo, no choice
+usr_z_project = Dialog.getCheckbox();
+usr_drop_hash = Dialog.getCheckbox();
+usr_skipdir   = Dialog.getRadioButton(); // pseudo, no choice
 usr_move_to   = Dialog.getRadioButton();
 usr_outputdir = Dialog.getString();
-usr_overwrite  = Dialog.getCheckbox();
-usr_restore    = Dialog.getCheckbox();
+usr_overwrite = Dialog.getCheckbox();
+usr_restore   = Dialog.getCheckbox();
 
 if (usr_overwrite) {
 	
@@ -175,9 +175,13 @@ if (usr_overwrite) {
 	
 }
 
+// select directory to look for images
+
 sel_dir_path = getDirectory("Choose a Directory to Process");
 
-if (usr_move_to   == "own") {
+// select directory to store processed images; else will be inferred from choices_rename
+
+if (usr_move_to == "own") {
 
 	// user chose to save processed images apart from selected image folder
 
@@ -196,7 +200,6 @@ if (usr_move_to   == "own") {
 		// user selected the output folder to save the images; this is not
 		// meaningful, so we process the first toplevel
 
-		out_dir_path = sel_dir_path;
 		sel_dir_path = replace(out_dir_path, usr_outputdir + File.separator 
 		+ "$", "");
 		sel_dir_path_short = split(sel_dir_path, File.separator);
@@ -222,7 +225,7 @@ if (usr_move_to   == "own") {
 			"', I might be going to overwrite its contents.";
 			Dialog.addMessage(wrap_words(msg));
 			Dialog.show();
-				
+			
 		}
 			
 	}
@@ -230,46 +233,64 @@ if (usr_move_to   == "own") {
 }
 
 function process_directory(path) {
-
+	
+	// apply this recursively upon sub-directories
+	
 	files = getFileList(path);
-
+	
 	for (f = 0; f < files.length; f++) {
 
 		if (endsWith(files[f], File.separator) && !startsWith(files[f], "_")) {
-
+			
+			// sub-directory that is not masked by "_xxx" prefix: recursion
+			
 			print("... advancing to '" + path + files[f] + "'");
 			
 			process_directory(path + files[f]);
 			
 		} else {
-
+			
+			// file that is an image of the specified type
+			
 			if (matches(toLowerCase(files[f]), ".+\\.(" + 
-				def_file_extensions + ")$")) {
+				usr_fileext + ")$")) {
 					
 				n = new_file_location(path + files[f], sel_dir_path, 
 						usr_rename_to, usr_drop_hash);
 
 				if (usr_move_to   == "toplevel") {
-
-					new_d = sel_dir_path + n[0] + usr_outputdir + File.separator;
+					
+					// in case of toplevel placement, choices_rename precede
+					
+					new_d = sel_dir_path + n[0] + usr_outputdir +
+						File.separator;
 					mnt_d = sel_dir_path;
 					
 				} else {
-
+					
+					// else simply move files to the user-defined output dir;
+					// note that depending on overwriting policy, not all images
+					// are processed or only the latest ones saved if they have
+					// the same file name and are not chosen to be "renamed" 
+					// properly ...
+					
 					new_d = out_dir_path + usr_outputdir + File.separator;
 					mnt_d = out_dir_path;
 						
 				}
 
-				if (usr_restore  ) {
-
+				if (usr_restore) {
+					
+					// if we restore directories, we interpret concatenation
+					// marks of file names as directory paths
+					
 					new_f = replace(n[1], "@@", File.separator);
 					new_f = replace(new_f, "@", File.separator);
 					new_d = new_d + File.getDirectory(new_f);
 					new_f = File.getName(new_f);
 					
 				} else {
-
+					
 					new_f = replace(n[1], "@@", "-");
 					new_f = replace(new_f, "@", "__");
 					
@@ -328,7 +349,7 @@ print("Selected folder '" + sel_dir_path + "'");
 
 setBatchMode(true);
 
-process_directory(sel_dir_path);
+process_directory(sel_dir_path); // let the magic happen
 
 setBatchMode(false);
  
